@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling>=1.18.0"]
+build-backend = "hatchling.build"
+[tool.hatch.build]
+include = ["treeutils/*"]
+[project]
+name = "treeutils"
+version = "0.1.0"
+description = "Tree utilities for Python objects"
+authors = [
+    {name = "Ashok Cutkosky", email = "ashok@cutkosky.com"}
+]
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+python_files = ["test_*.py"] 
