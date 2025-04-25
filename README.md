@@ -81,6 +81,49 @@ leaves, treedef = flatten(points)
 print(leaves)  # [1, 2, 3, 4]
 ```
 
+### PyTorch Module Support
+
+TreeUtils provides built-in support for PyTorch modules, allowing you to map functions over module parameters, buffers, and submodules. This is particularly useful for operations like parameter initialization, optimization, and model manipulation.
+
+```python
+import torch
+import torch.nn as nn
+from treeutils import map
+
+# Create a simple neural network
+class SimpleNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.linear1 = nn.Linear(10, 20)
+        self.linear2 = nn.Linear(20, 10)
+        self.register_buffer('buffer', torch.randn(10))
+
+# Initialize a network
+net = SimpleNet()
+
+# Double all parameters and buffers
+def double_tensor(x):
+    if isinstance(x, torch.Tensor):
+        return x * 2
+    return x
+
+mapped_net = map(double_tensor, net)
+
+# Verify the mapping
+assert torch.equal(mapped_net.linear1.weight, net.linear1.weight * 2)
+assert torch.equal(mapped_net.linear2.weight, net.linear2.weight * 2)
+assert torch.equal(mapped_net.buffer, net.buffer * 2)
+
+# Map with path tracking
+def path_aware_fn(x, path):
+    if isinstance(x, torch.Tensor):
+        return f"{x.shape} at {path}"
+    return x
+
+mapped_with_path = map(path_aware_fn, net, with_path=True)
+print(mapped_with_path.linear1.weight)  # "torch.Size([20, 10]) at [linear1, weight]"
+```
+
 ### Path Tracking
 
 ```python
