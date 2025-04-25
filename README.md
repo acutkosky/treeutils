@@ -81,6 +81,21 @@ leaves, treedef = flatten(points)
 print(leaves)  # [1, 2, 3, 4]
 ```
 
+### Path Tracking
+
+```python
+from treeutils import flatten
+
+# Get paths to each leaf node
+nested = {
+    'a': [1, 2, 3],
+    'b': {'x': 4, 'y': 5}
+}
+leaves, treedef, paths = flatten(nested, with_path=True)
+for leaf, path in zip(leaves, paths):
+    print(f"Value: {leaf}, Path: {path}")
+```
+
 ### PyTorch Module Support
 
 TreeUtils provides built-in support for PyTorch modules, allowing you to map functions over module parameters, buffers, and submodules. This is particularly useful for operations like parameter initialization, optimization, and model manipulation.
@@ -122,21 +137,6 @@ def path_aware_fn(x, path):
 
 mapped_with_path = map(path_aware_fn, net, with_path=True)
 print(mapped_with_path.linear1.weight)  # "torch.Size([20, 10]) at [linear1, weight]"
-```
-
-### Path Tracking
-
-```python
-from treeutils import flatten
-
-# Get paths to each leaf node
-nested = {
-    'a': [1, 2, 3],
-    'b': {'x': 4, 'y': 5}
-}
-leaves, treedef, paths = flatten(nested, with_path=True)
-for leaf, path in zip(leaves, paths):
-    print(f"Value: {leaf}, Path: {path}")
 ```
 
 ## API Reference
