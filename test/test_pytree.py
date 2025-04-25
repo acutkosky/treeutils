@@ -324,3 +324,107 @@ def test_is_leaf_empty():
     assert leaves == [[], 1, 2, {}]
     assert unflatten(leaves, treedef) == data
 
+def test_map_multiple_trees():
+    # Test mapping over multiple trees with same structure
+    tree1 = {'a': [1, 2], 'b': 3}
+    tree2 = {'a': [4, 5], 'b': 6}
+    
+    # Add corresponding elements
+    result = map(lambda x, y: x + y, tree1, tree2)
+    assert result == {'a': [5, 7], 'b': 9}
+    
+    # Multiply corresponding elements
+    result = map(lambda x, y: x * y, tree1, tree2)
+    assert result == {'a': [4, 10], 'b': 18}
+    
+    # Test with more than two trees
+    tree3 = {'a': [7, 8], 'b': 9}
+    result = map(lambda x, y, z: x + y + z, tree1, tree2, tree3)
+    assert result == {'a': [12, 15], 'b': 18}
+
+def test_map_multiple_trees_with_path():
+    # Test mapping over multiple trees with path tracking
+    tree1 = {'a': [1, 2], 'b': 3}
+    tree2 = {'a': [4, 5], 'b': 6}
+    
+    def path_aware_fn(x, y, path):
+        return f"({x}+{y}) at {path}"
+    
+    result = map(path_aware_fn, tree1, tree2, with_path=True)
+    assert result == {
+        'a': ['(1+4) at [a, 0]', '(2+5) at [a, 1]'],
+        'b': '(3+6) at [b]'
+    }
+
+def test_map_multiple_trees_with_is_leaf():
+    # Test mapping over multiple trees with is_leaf function
+    tree1 = {'a': [1, 2], 'b': 3}
+    tree2 = {'a': [4, 5], 'b': 6}
+    
+    def is_leaf(node):
+        return isinstance(node, int)
+    
+    # Should stop at integers
+    result = map(lambda x, y: x + y, tree1, tree2, is_leaf=is_leaf)
+    assert result == {'a': [5, 7], 'b': 9}
+    
+    # Test with is_leaf that stops at lists
+    def is_list_leaf(node):
+        return isinstance(node, list)
+    
+    result = map(lambda x, y: str(x) + str(y), tree1, tree2, is_leaf=is_list_leaf)
+    assert result == {'a': '[1, 2][4, 5]', 'b': '36'}
+
+def test_map_multiple_trees_different_structures():
+    # Test mapping over trees with different structures (should raise error)
+    tree1 = {'a': [1, 2], 'b': 3}
+    tree2 = {'a': [4, 5, 6], 'b': 7}  # Different length list
+    
+    with pytest.raises(ValueError):
+        map(lambda x, y: x + y, tree1, tree2)
+    
+    tree3 = {'a': [1, 2], 'c': 3}  # Different keys
+    with pytest.raises(ValueError):
+        map(lambda x, y: x + y, tree1, tree3)
+
+def test_map_multiple_trees_with_namedtuples():
+    # Test mapping over multiple trees containing namedtuples
+    tree1 = {'point': Point(1, 2), 'value': 3}
+    tree2 = {'point': Point(4, 5), 'value': 6}
+    
+    result = map(lambda x, y: x + y, tree1, tree2)
+    assert result == {'point': Point(5, 7), 'value': 9}
+
+def test_map_multiple_trees_prefix_structure():
+    # Test mapping over trees where first tree's structure is a prefix of others
+    tree1 = {'a': [1, 2], 'b': 3}  # Basic structure
+    tree2 = {'a': [4, 5], 'b': [3,6]}  # Additional field
+    tree3 = {'a': [7, 8], 'b': [3,{'x': 9, 'y': 10}]}  # More additional fields
+    
+    # Should work with first tree as prefix
+    result = map(lambda x, y: x if isinstance(y, int) else y, tree1, tree2)
+    assert result == {'a': [1, 2], 'b': [3,6]}
+    
+    # Should work with three trees
+    def fn(*xs):
+        if all(isinstance(x, int) for x in xs):
+            return sum(xs)
+        else:
+            return map(fn, *xs[1:])
+
+    result = map(fn, tree1, tree2, tree3)
+    assert result == {'a': [12, 15], 'b': [6, {'x': 9, 'y': 10}]}
+    
+    # Test with lists of different lengths
+    tree1 = {'a': [1, 2]}
+    tree2 = {'a': [3, 4, 5]}
+    
+    with pytest.raises(ValueError):
+        map(lambda x, y: x + y, tree1, tree2)  # Should fail - lists must match in length
+
+    # Test with different nested structures
+    tree1 = {'a': {'x': 1}, 'b': 2}
+    tree2 = {'a': {'x': 3, 'y': 4}, 'b': 5, 'c': 6}
+
+    with pytest.raises(ValueError):
+        map(lambda x, y: x + y, tree1, tree2)
