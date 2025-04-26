@@ -2,7 +2,6 @@ import pytest
 import torch
 import torch.nn as nn
 from treeutils import map, flatten, unflatten
-import treeutils.pytorch_nodes
 
 
 class SimpleModule(nn.Module):

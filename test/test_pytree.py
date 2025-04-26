@@ -428,3 +428,86 @@ def test_map_multiple_trees_prefix_structure():
 
     with pytest.raises(ValueError):
         map(lambda x, y: x + y, tree1, tree2)
+
+def test_map_broadcast_prefix():
+    # Test basic broadcast prefix functionality
+    tree1 = {'a': 1, 'b': 2, 'c': {'x': 3, 'y': 4}}  # Simple structure
+    tree2 = {'a': 3, 'b': 4, 'c': 5}  # Additional field
+    
+    # Without broadcast_prefix, should fail
+    with pytest.raises(ValueError):
+        map(lambda x, y: x + y, tree1, tree2)
+    
+    # With broadcast_prefix, should work
+    result = map(lambda x, y: x + y, tree1, tree2, broadcast_prefix=True)
+    assert result == {'a': 4, 'b': 6, 'c': {'x': 8, 'y': 9}}
+    
+    # Test with mixed structures
+    tree1 = {'a': {'x': [1, 2]}, 'b': 2}
+    tree2 = {'a': 3, 'b': {'x': 4, 'y': 5}}
+    
+    result = map(lambda x, y: x + y if isinstance(y, int) else x, tree1, tree2, broadcast_prefix=True)
+    assert result == {'a': {'x': [4, 5]}, 'b': 2} 
+    
+    # Test with multiple trees
+    tree1 = {'a': {'x': [1, 2]}, 'b': [[3, 4], 5]}
+    tree2 = {'a': 2, 'b': [3, [6, 7]]}
+    tree3 = {'a': {'x': [[3,4], 2]}, 'b': 5}
+    
+    def add_if_int(x,y,z):
+        a = 0
+        if isinstance(x, int):
+            a = x
+        if isinstance(y, int):
+            a += y
+        if isinstance(z, int):
+            a += z
+        return a
+    result = map(add_if_int, tree1, tree2, tree3, broadcast_prefix=True)
+    assert result == {'a': {'x': [3, 6]}, 'b': [[11, 12], 10]}
+                      
+    # Test with path tracking
+    def path_aware_fn(x, y, path):
+        return f"({x}+{y}) at {path}"
+    
+    tree1 = {'a': [1, 2]}
+    tree2 = {'a': 2}
+    
+    result = map(path_aware_fn, tree1, tree2, with_path=True, broadcast_prefix=True)
+    assert result == {'a': ['(1+2) at [a, 0]', '(2+2) at [a, 1]']}
+
+def test_map_broadcast_prefix_edge_cases():
+    # Test with None values
+    tree1 = {'a': None}
+    tree2 = {'a': 1}
+    
+    result = map(lambda x, y: y, tree1, tree2, broadcast_prefix=True)
+    assert result == {'a': 1}
+    
+    # Test with mixed types
+    tree1 = {'a': [1, 2]}
+    tree2 = {'a': {'x': 3}}
+    
+    with pytest.raises(ValueError):
+        map(lambda x, y: x + y, tree1, tree2, broadcast_prefix=True)
+    
+    # Test with is_leaf function
+    def is_leaf(node):
+        return isinstance(node, list)
+    
+    tree1 = {'a': [1, 2], 'b': 4}
+    tree2 = {'a': 3, 'b': [4, 5]}
+    
+    result = map(lambda x, y: x + [y] if isinstance(y, int) else [x] + y, tree1, tree2, broadcast_prefix=True, is_leaf=is_leaf)
+    assert result == {'a': [1, 2, 3], 'b': [4, 4, 5]}
+    
+    # Test with broadcast_prefix=False (should be same as default)
+    with pytest.raises(ValueError):
+        map(lambda x, y: x + [y] if isinstance(y, int) else [x] + y, tree1, tree2, broadcast_prefix=False)
+    
+    # Test with broadcast_prefix=True and identical structures
+    tree1 = {'a': 1, 'b': 2}
+    tree2 = {'a': 3, 'b': 4}
+    
+    result = map(lambda x, y: x + y, tree1, tree2, broadcast_prefix=True)
+    assert result == {'a': 4, 'b': 6}  # Should work normally

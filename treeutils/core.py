@@ -1,4 +1,4 @@
-from typing import Callable, Type, Any, List, Tuple, NamedTuple, Optional, Dict
+from typing import Callable, Type, Any, List, Tuple, NamedTuple
 
 # A registry of pytree nodes
 # pytree_node_registry[type] = (flatten_fn, unflatten_fn)
@@ -32,10 +32,11 @@ def get_type_name(type_obj: Type) -> str:
 
 class PyTreeDef:
     """A tree structure definition for Python objects.
-    
+
     This class represents the structure of a Python object tree, including its type,
     children, auxiliary data, and optional keys for named children.
     """
+
     def __init__(
         self,
         root: Any,
@@ -44,7 +45,7 @@ class PyTreeDef:
         keys: List[Any],
     ):
         """Initialize a PyTreeDef.
-        
+
         Args:
             root: The root type of the tree (None if the node is a leaf)
             children: List of child PyTreeDefs
@@ -58,7 +59,7 @@ class PyTreeDef:
 
     def as_string(self) -> str:
         """Convert the tree definition to a string representation.
-        
+
         Returns:
             A string representation of the tree structure
         """
@@ -72,7 +73,7 @@ class PyTreeDef:
 
     def __repr__(self) -> str:
         """Get the string representation of the PyTreeDef.
-        
+
         Returns:
             A string representation of the PyTreeDef
         """
@@ -91,15 +92,15 @@ def register_pytree_node(
     aux_data is auxiliary data associated with the node used to reconstruct the node.
     keys is an optional list of keys for named children. It may also be needed to reconstruct the node.
     unflatten_fn should take three arguments (children, aux_data, keys) and return the reconstructed node.
-    
+
     Args:
         cls: The type to register
         flatten_fn: Function to flatten instances of this type
         unflatten_fn: Function to unflatten instances of this type
-        
+
     Returns:
         The registered type
-        
+
     Raises:
         AssertionError: If the type is already registered
     """
@@ -110,10 +111,10 @@ def register_pytree_node(
 
 def is_pytree_node(cls: Type) -> bool:
     """Check if a type is registered as a pytree node.
-    
+
     Args:
         cls: The type to check
-        
+
     Returns:
         True if the type is registered as a pytree node, False otherwise
     """
@@ -125,10 +126,10 @@ def is_pytree_node(cls: Type) -> bool:
 
 def get_pytree_node_registry(cls: Type) -> RegistryEntry:
     """Get the registry entry for a pytree node type.
-    
+
     Args:
         cls: The type to look up
-        
+
     Returns:
         The registry entry for the type, or False if not found
     """
@@ -140,10 +141,10 @@ def get_pytree_node_registry(cls: Type) -> RegistryEntry:
 
 def flatten_once(node: Any) -> Tuple[List[Any], Any, List[Any]]:
     """Flatten a single pytree node.
-    
+
     Args:
         node: The node to flatten
-        
+
     Returns:
         A tuple of (children, aux_data, keys)
     """
@@ -154,115 +155,139 @@ def unflatten_once(
     node_type: Any, children: List[Any], aux: Any, keys: List[Any]
 ) -> Any:
     """Unflatten a single pytree node.
-    
+
     Args:
         node_type: The type of the node to unflatten
         children: List of child nodes
         aux: Auxiliary data
         keys: Optional list of keys for named children
-        
+
     Returns:
         The reconstructed node
     """
     return get_pytree_node_registry(node_type).unflatten_fn(children, aux, keys)
 
+
 def unzip(sequence):
     """Unzip a sequence of tuples into a tuple of sequences.
-    
+
     Args:
         sequence: A sequence of tuples
-        
+
     """
     return tuple(zip(*sequence))
+
 
 def map(
     fn: Callable[[Any], Any],
     *tree: Any,
     with_path: bool = False,
+    broadcast_prefix: bool = False,
     path_prefix: List[Any] = [],
     is_leaf: Callable[[Any], bool] = lambda *_: False,
 ) -> Any:
     """Map a function over one or more pytree structures.
-    
+
     This function applies the given function to each node in the pytree(s), recursively traversing
     the tree structure. The function can optionally receive the path to each node.
-    
+
     When mapping over multiple trees, all trees must have the same structure (same types and keys
     at each level), or the first tree's structure must be a prefix of the other trees' structures.
+
+    If broadcast_prefix is True, then it is allowed for the later trees to have structure that is a
+    prefix of the first tree's structure as well.
+
     The function will be called with corresponding leaf nodes from each tree.
-    
+
     Args:
         fn: Function to apply to each node. If with_path is True, the function should accept
             N+1 arguments (node1, node2, ..., nodeN, path) where N is the number of trees.
             Otherwise, it should accept N arguments (node1, node2, ..., nodeN).
-        tree: The root node(s) of the tree(s) to map over. The first tree's structure must be a prefix of 
+        tree: The root node(s) of the tree(s) to map over. The first tree's structure must be a prefix of
             the other trees' structures.
         with_path: If True, the function will be called with both the nodes and their path
+        broadcast_prefix: If True, then it is allowed for the later trees to have structure that is a
+            prefix of the first tree's structure. In this case, the leaf of tree[i] used as an argument to fn
         path_prefix: Optional prefix for the path. Used internally for recursion
         is_leaf: Optional function to determine if a node should be treated as a leaf,
-            even if it's a pytree node. 
+            even if it's a pytree node.
             If with_path is True, the function should take two arguments (node, path).
             Otherwise, it should take one argument (node).
 
-            
+
     Returns:
         A new pytree with the function applied to each node. The structure of the tree
         is preserved, only the values are transformed.
-        
+
     Raises:
         ValueError: If the trees have different structures
     """
     if not tree:
         raise ValueError("At least one tree must be provided")
-        
-    node = tree[0]
-    
+
     # Check if we should treat this as a leaf
-    is_leaf_args = (node,) if not with_path else (node, path_prefix)
-    if not is_pytree_node(type(node)) or is_leaf(*is_leaf_args):
+    def is_leaf_fn(node):
+        is_leaf_args = (node,) if not with_path else (node, path_prefix)
+        return not is_pytree_node(type(node)) or is_leaf(*is_leaf_args)
+
+    if is_leaf_fn(tree[0]):
         if with_path:
             return fn(*tree, path_prefix)
         else:
             return fn(*tree)
 
     # Flatten the first tree
-    children, aux, keys = flatten_once(node)
-    key_tuples = [KeyTuple(type(node), key) for key in keys]
+    children, aux, keys = flatten_once(tree[0])
+    key_tuples = [KeyTuple(type(tree[0]), key) for key in keys]
 
     # Prepare children lists for all trees
     all_children = [[child] for child in children]
-    
+
     # Flatten and verify structure of other trees
     if len(tree) > 1:
         for idx, other in enumerate(tree[1:], 1):
-            other_children, other_aux, other_keys = flatten_once(other)
-            
-            # Verify structure matches
-            if type(other) != type(node):
-                raise ValueError(f"Tree structures do not match at path {path_prefix}: "
-                               f"expected type {type(node)}, got {type(other)} at input {idx}")
-            
-            if len(children) != len(other_children):
-                raise ValueError(f"Tree structures do not match at path {path_prefix}: "
-                               f"expected {len(children)} children, got {len(other_children)} at input {idx}")
-            
-            other_key_tuples = [KeyTuple(type(other), key) for key in other_keys]
-            for key_tuple, other_key_tuple in zip(key_tuples, other_key_tuples):
-                if key_tuple.key != other_key_tuple.key:
-                    raise ValueError(f"Tree structures do not match at path {path_prefix}: "
-                                    f"expected key {key_tuple.key}, got {other_key_tuple.key} at input {idx}")
-            
-            # Add children from other tree
-            for child_list, other_child in zip(all_children, other_children):
-                child_list.append(other_child)
+            if is_leaf_fn(other):
+                if not broadcast_prefix:
+                    raise ValueError(
+                        f"Tree structures do not match at path {path_prefix}: encountered leaf node at input {idx}"
+                    )
+                for child_list in all_children:
+                    child_list.append(other)
+            else:
+                other_children, other_aux, other_keys = flatten_once(other)
+
+                if len(children) != len(other_children):
+                    raise ValueError(
+                        f"Tree structures do not match at path {path_prefix}: "
+                        f"expected {len(children)} children, got {len(other_children)} at input {idx}"
+                    )
+
+                other_key_tuples = [KeyTuple(type(other), key) for key in other_keys]
+                for key_tuple, other_key_tuple in zip(key_tuples, other_key_tuples):
+                    if key_tuple.key != other_key_tuple.key:
+                        raise ValueError(
+                            f"Tree structures do not match at path {path_prefix}: "
+                            f"expected key {key_tuple.key}, got {other_key_tuple.key} at input {idx}"
+                        )
+
+                # Add children from other tree
+                for child_list, other_child in zip(all_children, other_children):
+                    child_list.append(other_child)
 
     # Map over children
     mapped_children = [
-        map(fn, *child_list, with_path=with_path, path_prefix=path_prefix + [key_tuple], is_leaf=is_leaf)
+        map(
+            fn,
+            *child_list,
+            with_path=with_path,
+            broadcast_prefix=broadcast_prefix,
+            path_prefix=path_prefix + [key_tuple],
+            is_leaf=is_leaf,
+        )
         for child_list, key_tuple in zip(all_children, key_tuples)
     ]
-    
-    return unflatten_once(type(node), mapped_children, aux, keys)
+
+    return unflatten_once(type(tree[0]), mapped_children, aux, keys)
 
 
 def flatten_recursive(
@@ -272,20 +297,20 @@ def flatten_recursive(
     is_leaf: Callable[[Any], bool] = lambda *_: False,
 ) -> Tuple[List[Any], PyTreeDef, List[List[Any]]]:
     """Recursively flatten a pytree structure.
-    
+
     This function converts a pytree into a flat list of leaves and a tree definition
     that can be used to reconstruct the original structure. It can optionally track
     the path to each leaf node.
-    
+
     Args:
         node: The root node of the pytree to flatten
         with_path: If True, also return the paths to each leaf node
         path_prefix: Optional prefix for the path. Used internally for recursion
         is_leaf: Optional function to determine if a node should be treated as a leaf,
-            even if it's a pytree node. 
+            even if it's a pytree node.
             If with_path is True, the function should take two arguments (node, path).
             Otherwise, it should take one argument (node).
-            
+
     Returns:
         A tuple containing:
         - List of leaf nodes
@@ -325,22 +350,22 @@ def flatten(
     is_leaf: Callable[[Any], bool] = lambda *_: False,
 ) -> Tuple[List[Any], PyTreeDef, List[List[Any]]]:
     """Flatten a pytree structure into leaves and a tree definition.
-    
+
     This is the main entry point for flattening pytrees. It converts a pytree into a flat
     list of leaves and a tree definition that can be used to reconstruct the original
     structure. It can optionally track the path to each leaf node.
-    
+
     This function is a thin wrapper around flatten_recursive that handles the initial
     setup and ensures consistent return types regardless of whether with_path is True.
-    
+
     Args:
         node: The root node of the pytree to flatten
         with_path: If True, also return the paths to each leaf node
         is_leaf: Optional function to determine if a node should be treated as a leaf,
-            even if it's a pytree node. 
+            even if it's a pytree node.
             If with_path is True, the function should take two arguments (node, path).
             Otherwise, it should take one argument (node).
-            
+
     Returns:
         A tuple containing:
         - List of leaf nodes
@@ -361,13 +386,13 @@ def unflatten_recursive(
     idx: int, leaves: List[Any], treedef: PyTreeDef, depth: int
 ) -> Any:
     """Recursively unflatten a pytree from leaves and a tree definition.
-    
+
     Args:
         idx: Current index into the leaves list
         leaves: List of leaf nodes
         treedef: Tree definition
         depth: Current depth in the tree
-        
+
     Returns:
         A tuple of (reconstructed_node, next_index)
     """
@@ -386,121 +411,16 @@ def unflatten_recursive(
 
 def unflatten(leaves: List[Any], treedef: PyTreeDef) -> Any:
     """Unflatten a pytree from leaves and a tree definition.
-    
+
     Args:
         leaves: List of leaf nodes
         treedef: Tree definition
-        
+
     Returns:
         The reconstructed pytree
     """
     return unflatten_recursive(0, leaves, treedef, 0)[0]
 
-
-# register some default nodes
-
-
-# list
-def flatten_list(node: List[Any]) -> Tuple[List[Any], Any, Optional[List[Any]]]:
-    """Flatten a list node.
-    
-    Args:
-        node: List to flatten
-        
-    Returns:
-        A tuple of (children, None, None)
-    """
-    return node, None, list(range(len(node)))
-
-
-def unflatten_list(
-    children: List[Any], aux: Any, keys: Optional[List[Any]]
-) -> List[Any]:
-    """Unflatten a list node.
-    
-    Args:
-        children: List of child nodes
-        aux: Unused
-        keys: Unused
-        
-    Returns:
-        The reconstructed list
-    """
-    return list(children)
-
-
-register_pytree_node(list, flatten_list, unflatten_list)
-
-
-# dict
-def flatten_dict(node: Dict[Any, Any]) -> Tuple[List[Any], Any, Optional[List[Any]]]:
-    """Flatten a dict node.
-    
-    Args:
-        node: Dict to flatten
-        
-    Returns:
-        A tuple of (values, None, keys)
-    """
-    return list(node.values()), None, list(node.keys())
-
-
-def unflatten_dict(
-    children: List[Any], aux: Any, keys: Optional[List[Any]]
-) -> Dict[Any, Any]:
-    """Unflatten a dict node.
-    
-    Args:
-        children: List of values
-        aux: Unused
-        keys: List of keys
-        
-    Returns:
-        The reconstructed dict
-    """
-    return dict(zip(keys, children))
-
-
-register_pytree_node(dict, flatten_dict, unflatten_dict)
-
-
-# tuple
-def flatten_tuple(node: Tuple[Any, ...]) -> Tuple[List[Any], Any, Optional[List[Any]]]:
-    """Flatten a tuple node.
-    
-    If the tuple has a _fields attribute, it is assumed to be a namedtuple and the keys will be the field names.
-    Otherwise, the keys will be None.
-
-    Args:
-        node: Tuple to flatten
-        
-    Returns:
-        A tuple of (elements, None, keys)
-    """
-    if hasattr(node, "_fields"):
-        keys = list(node._fields)
-    else:
-        keys = list(range(len(node)))
-    return list(node), None, keys
-
-
-def unflatten_tuple(
-    children: List[Any], aux: Any, keys: Optional[List[Any]]
-) -> Tuple[Any, ...]:
-    """Unflatten a tuple node.
-    
-    Args:
-        children: List of elements
-        aux: Unused
-        keys: Unused
-        
-    Returns:
-        The reconstructed tuple
-    """
-    return tuple(children)
-
-
-register_pytree_node(tuple, flatten_tuple, unflatten_tuple)
 
 __all__ = [
     "map",

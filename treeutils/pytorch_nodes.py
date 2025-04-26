@@ -6,7 +6,6 @@ import torch
 from treeutils.core import register_pytree_node
 
 
-
 def shallow_copy_module(module: torch.nn.Module) -> torch.nn.Module:
     """Shallow copy a PyTorch module.
 
