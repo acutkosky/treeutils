@@ -370,7 +370,7 @@ def flatten(
         A tuple containing:
         - List of leaf nodes
         - Tree definition that can be used to reconstruct the original structure
-        - List of paths to each leaf node
+        - List of paths to each leaf node (only if with_path is True)
     """
     leaves, treedef, path_prefixes = flatten_recursive(
         node, with_path=with_path, is_leaf=is_leaf

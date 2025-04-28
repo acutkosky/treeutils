@@ -247,4 +247,28 @@ def test_map_incompatible_modules():
     
     # Attempt to map over incompatible modules
     with pytest.raises(ValueError):
-        map(lambda x, y: x + y, module1, module2) 
+        map(lambda x, y: x + y, module1, module2)
+
+def test_map_inplace_weight_modification():
+    # Create a simple module
+    module = SimpleModule()
+    original_weight = module.submodule.weight.clone()
+    
+    # Map a function that modifies weights in-place
+    @torch.no_grad()
+    def modify_weight_inplace(x):
+        if isinstance(x, torch.Tensor):
+            x.mul_(2.0)  # In-place multiplication
+            return x
+        return x
+    
+    # Apply the in-place modification
+    modified = map(modify_weight_inplace, module)
+    
+    # Verify the modification was in-place
+    assert modified is not module  # The same object is not returned
+    assert modified.submodule.weight is module.submodule.weight # but no new tensors are created.
+    assert torch.equal(module.submodule.weight, original_weight * 2.0)
+    assert torch.equal(module.param, torch.tensor([2.0]))  # param was also modified
+    assert torch.equal(module.buffer, torch.tensor([4.0]))  # buffer was also modified
+    assert torch.equal(module.submodule.bias, torch.tensor([8.0]))  # bias was also modified 
