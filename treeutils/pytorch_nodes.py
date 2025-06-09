@@ -6,6 +6,11 @@ import torch
 from treeutils.core import register_pytree_node
 
 
+BUFFER = "buffer"
+SUBMODULE = "submodule"
+PARAMETER = "parameter"
+
+
 def shallow_copy_module(module: torch.nn.Module) -> torch.nn.Module:
     """Shallow copy a PyTorch module.
 
@@ -29,8 +34,9 @@ def flatten_module(module: torch.nn.Module) -> Tuple[List[Any], Any, List[Any]]:
         * parameters and buffers accessible directly from this module (not submodules).
         * submodules themselves.
 
-    aux will be the module itself, with all children replaced by None.
-    keys will be a list of the names of the parameters and buffers and submodules needed to reconstruct the module.
+    aux will be tuple containing:
+        * the module itself, with all children replaced by None.
+        * a dictionary mapping child names to one of 'buffer', 'submodule', 'parameter'
 
     Args:
         module: The module to flatten
@@ -42,49 +48,57 @@ def flatten_module(module: torch.nn.Module) -> Tuple[List[Any], Any, List[Any]]:
     children = []
     keys = []
 
+    child_types = {}
+
     # Add parameters
     for name, param in module._parameters.items():
         children.append(param)
         keys.append(name)
-
+        child_types[name] = PARAMETER
     # Add buffers
     for name, buffer in module._buffers.items():
         children.append(buffer)
         keys.append(name)
-
+        child_types[name] = BUFFER
     # Add submodules
     for name, submodule in module._modules.items():
         children.append(submodule)
         keys.append(name)
-
+        child_types[name] = SUBMODULE
     # Create a copy of the module with all children set to None
-    aux = shallow_copy_module(module)
+    blank_module = shallow_copy_module(module)
+    aux = (blank_module, child_types)
 
     return children, aux, keys
 
 
 def unflatten_module(
-    children: List[Any], aux: torch.nn.Module, keys: List[Any]
+    children: List[Any], aux: Tuple[torch.nn.Module, Dict[str, str]], keys: List[Any]
 ) -> torch.nn.Module:
     """Unflatten a PyTorch module from its flattened components.
 
     Args:
         children: List of parameters, buffers, and submodules
-        aux: The module with all children set to None
+        aux: Tuple containing:
+            * The module with all children set to None
+            * A dictionary mapping child names to one of 'buffer', 'submodule', 'parameter'
         keys: List of names for the children
 
     Returns:
         The reconstructed module
     """
+    module, child_types = aux
     for key, child in zip(keys, children):
-        if isinstance(getattr(aux, key), torch.nn.Parameter):
-            aux._parameters[key] = child
-        elif isinstance(getattr(aux, key), torch.nn.Module):
-            aux._modules[key] = child
+        if child_types[key] == PARAMETER:
+            module._parameters[key] = child
+        elif child_types[key] == SUBMODULE:
+            module._modules[key] = child
+        elif child_types[key] == BUFFER:
+            module._buffers[key] = child
         else:
-            aux._buffers[key] = child
+            raise ValueError(f"Unknown child type: {child_types[key]}")
 
-    return aux
+    return module
 
 
 # Register PyTorch Module as a pytree node

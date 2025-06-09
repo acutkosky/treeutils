@@ -272,3 +272,33 @@ def test_map_inplace_weight_modification():
     assert torch.equal(module.param, torch.tensor([2.0]))  # param was also modified
     assert torch.equal(module.buffer, torch.tensor([4.0]))  # buffer was also modified
     assert torch.equal(module.submodule.bias, torch.tensor([8.0]))  # bias was also modified 
+
+def test_linear_layer_none_bias():
+    # Create a linear layer with bias=None
+    linear = nn.Linear(3, 2, bias=False)
+    linear.weight.data.fill_(1.0)
+    
+    # Flatten the module
+    leaves, treedef = flatten(linear)
+    
+    # Should only have the weight, and bias is None
+    assert len(leaves) == 2
+    assert torch.equal(leaves[0], linear.weight)
+    assert leaves[1] is None
+
+    # Reconstruct and verify
+    reconstructed = unflatten(leaves, treedef)
+    assert isinstance(reconstructed, nn.Linear)
+    assert torch.equal(reconstructed.weight, linear.weight)
+    assert reconstructed.bias is None  # Important: bias should remain None
+    
+    # Test with map function as well
+    def double_tensor(x):
+        if isinstance(x, torch.Tensor):
+            return x * 2
+        return x
+    
+    mapped = map(double_tensor, linear)
+    assert isinstance(mapped, nn.Linear)
+    assert torch.equal(mapped.weight, linear.weight * 2)
+    assert mapped.bias is None  # Important: bias should remain None 
